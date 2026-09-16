@@ -376,7 +376,7 @@ jobs:
           fi
           
           ZIP_NAME="${{ inputs.rom_source }}-${ZIP_PREFIX}-$(date -u +"%m%d")"
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git
+          git clone --depth=1 https://github.com/KernelSU-Next/AnyKernel3.git
           cp sm8650/out/arch/arm64/boot/Image AnyKernel3/Image
           cd AnyKernel3
           zip -r9 ../"${ZIP_NAME}.zip" * -x .git
