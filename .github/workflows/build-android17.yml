@@ -11,6 +11,7 @@ on:
           - YAAP
           - DerpFest
           - LineageOS
+          - Crdroid
           - FrierenKernel
 
       ksu_type:
