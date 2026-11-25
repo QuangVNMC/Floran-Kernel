@@ -65,6 +65,30 @@ on:
         type: boolean
         default: false
 
+      enable_bbr3:
+        description: "Enable BBRv3 congestion control (GKI 6.1 backport from WildKernels)"
+        required: false
+        type: boolean
+        default: false
+
+      enable_ttl:
+        description: "Enable TTL target support (IP_NF_TARGET_TTL / IP6 HL)"
+        required: false
+        type: boolean
+        default: false
+
+      enable_sdp900ma:
+        description: "Allow 900 mA on USB SDP ports on OPLUS devices"
+        required: false
+        type: boolean
+        default: false
+
+      enable_unicode_fix:
+        description: "Unicode bypass fix for kernel 6.1+"
+        required: false
+        type: boolean
+        default: false
+
       kernel_name:
         description: "Custom Kernel Name"
         required: false
@@ -95,6 +119,10 @@ jobs:
       ccm: ${{ inputs.ccm }}
       droidspaces: ${{ inputs.droidspaces }}
       docker: ${{ inputs.docker }}
+      enable_bbr3: ${{ inputs.enable_bbr3 }}
+      enable_ttl: ${{ inputs.enable_ttl }}
+      enable_sdp900ma: ${{ inputs.enable_sdp900ma }}
+      enable_unicode_fix: ${{ inputs.enable_unicode_fix }}
       kernel_name: ${{ inputs.kernel_name }}
       create_release: ${{ inputs.create_release }}
     secrets: inherit

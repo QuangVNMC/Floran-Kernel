@@ -31,6 +31,26 @@ on:
         required: true
         type: boolean
         default: false
+      enable_bbr3:
+        description: "Enable BBRv3 congestion control (GKI 6.1 backport from WildKernels)"
+        required: false
+        type: boolean
+        default: false
+      enable_ttl:
+        description: "Enable TTL target support (IP_NF_TARGET_TTL / IP6 HL)"
+        required: false
+        type: boolean
+        default: false
+      enable_sdp900ma:
+        description: "Allow 900 mA on USB SDP ports on OPLUS devices"
+        required: false
+        type: boolean
+        default: false
+      enable_unicode_fix:
+        description: "Unicode bypass fix for kernel 6.1+"
+        required: false
+        type: boolean
+        default: false
       release_version:
         description: "Release version (leave empty to use date)"
         required: false
@@ -202,6 +222,47 @@ jobs:
               print("extract-cert.c key_pass layout is already compatible")
           PY
 
+      - name: Apply WildKernels feature patches (BBRv3 / TTL / SDP / Unicode)
+        run: |
+          cd sm8650
+
+          apply_patch() {
+            local p="$1" name
+            name=$(basename "$p")
+            if patch -p1 -F3 --forward --dry-run < "$p" >/dev/null 2>&1; then
+              patch -p1 -F3 --forward --no-backup-if-mismatch < "$p"
+              echo "Applied $name"
+            elif patch -p1 -F3 -R --dry-run < "$p" >/dev/null 2>&1; then
+              echo "$name is already present"
+            else
+              echo "$name does not apply to this kernel source; refusing to build." >&2
+              exit 1
+            fi
+          }
+
+          FEATURES=""
+          if [[ "${{ inputs.enable_bbr3 }}" == "true" ]]; then
+            apply_patch ../patch/bbrv3_android14-6.1.patch
+            printf '%s\n' 'CONFIG_TCP_CONG_ADVANCED=y' 'CONFIG_TCP_CONG_BBR3=y' >> arch/arm64/configs/gki_defconfig
+            FEATURES="${FEATURES} BBRv3"
+          fi
+          if [[ "${{ inputs.enable_ttl }}" == "true" ]]; then
+            printf '%s\n' 'CONFIG_IP_NF_TARGET_TTL=y' 'CONFIG_IP6_NF_TARGET_HL=y' 'CONFIG_IP6_NF_MATCH_HL=y' >> arch/arm64/configs/gki_defconfig
+            FEATURES="${FEATURES} TTL"
+          fi
+          if [[ "${{ inputs.enable_sdp900ma }}" == "true" ]]; then
+            apply_patch ../patch/oplus_sdp_900ma.patch
+            echo 'CONFIG_OPLUS_SDP_900MA=y' >> arch/arm64/configs/gki_defconfig
+            FEATURES="${FEATURES} SDP900MA"
+          fi
+          if [[ "${{ inputs.enable_unicode_fix }}" == "true" ]]; then
+            apply_patch ../patch/unicode_bypass_fix_6.1+.patch
+            FEATURES="${FEATURES} UnicodeFix"
+          fi
+          if [[ -n "$FEATURES" ]]; then
+            echo "### WildKernels features:$FEATURES" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
       - name: Compile Kernel
         env:
           KSU_TYPE: ${{ matrix.ksu_type }}
@@ -333,6 +394,12 @@ jobs:
           if [[ "${{ inputs.docker }}" == "true" ]]; then
             ZIP_PREFIX="${ZIP_PREFIX}-docker"
           fi
+
+          # 添加 WildKernels 功能标记
+          if [[ "${{ inputs.enable_bbr3 }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-bbr3"; fi
+          if [[ "${{ inputs.enable_ttl }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-ttl"; fi
+          if [[ "${{ inputs.enable_sdp900ma }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-sdp900"; fi
+          if [[ "${{ inputs.enable_unicode_fix }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-unifix"; fi
           
           ZIP_NAME="${{ matrix.rom_source }}-${ZIP_PREFIX}-Floran-$(date -u +"%m%d")"
           git clone --depth=1 https://github.com/AkiHaza/AnyKernel3.git
@@ -398,6 +465,7 @@ jobs:
             |    ROM 支持   | YAAP-17, FrierenKernel, Crdroid-17, LineageOS |
             | Clang | Android 17: [clang-r596125](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r596125/linux-x86-refs_heads_android17-release-clang-r596125.tar.gz); Android 16: [clang-r563880c](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r563880c/linux-x86-refs_heads_android16-qpr2-release-clang-r563880c.tar.gz) |
             | KernelSU 方案 |      KernelSU-Next, BakaSU       |
+            | WildKernels features | BBRv3: ${{ inputs.enable_bbr3 }} / TTL: ${{ inputs.enable_ttl }} / SDP 900mA: ${{ inputs.enable_sdp900ma }} / Unicode fix: ${{ inputs.enable_unicode_fix }} |
             |   Build时间   |       ${{ env.TIME_FORM }}        |
 
             **Manager downloads:**
