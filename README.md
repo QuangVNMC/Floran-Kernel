@@ -33,6 +33,7 @@ The workflow pulls the kernel source for the selected ROM, integrates KernelSU, 
   - TTL target support (IPv4 TTL / IPv6 HL)
   - OPLUS SDP 900 mA charging (from WildKernels)
   - Unicode Bypass Fix (kernel 6.1+, from WildKernels)
+  - NoMount VFS path-redirection subsystem (built-in, from maxsteeel/nomount)
 - Built with AOSP Clang: `clang-r596125` for Android 17 sources, `clang-r563880c` for Android 16 sources
 - Flashable ZIP output via AnyKernel3
 - Uploads to Actions Artifacts and can create a GitHub Release automatically
@@ -68,6 +69,8 @@ The workflow pulls the kernel source for the selected ROM, integrates KernelSU, 
 | `enable_ttl` | Appends `CONFIG_IP_NF_TARGET_TTL` / `CONFIG_IP6_NF_TARGET_HL` / `CONFIG_IP6_NF_MATCH_HL`. No patch file needed. |
 | `enable_sdp900ma` | Applies `patch/oplus_sdp_900ma.patch`: an early_initcall updates the live device tree so the OPLUS charger module raises USB SDP input current from 500 mA to 900 mA (supports both V1 and V2 charger frameworks). |
 | `enable_unicode_fix` | Applies `patch/unicode_bypass_fix_6.1+.patch`, fixing Unicode normalization handling in `fs/unicode/utf8-norm.c`. |
+| `enable_nomount` | Integrates NoMount with its upstream automatic `setup.sh` (Method 1) and sets `CONFIG_NOMOUNT=y`; builds it directly into the `Image`. |
+| `nomount_ref` | Branch, tag or commit passed to NoMount's `setup.sh` (default `dev`; leave empty to use the latest release tag). |
 | `Custom Kernel Name` | Sets an additional kernel version name. The script adds the `-` prefix automatically. |
 | `Create GitHub Release?` | Whether to create and upload a GitHub Release after a successful build. |
 
@@ -167,12 +170,34 @@ Patches are applied uniformly with `patch -p1 -F3 --forward` and checked for ide
 
 ZIP filenames append `-bbr3`, `-ttl`, `-sdp900` and `-unifix` for the enabled features.
 
+## NoMount support
+
+`enable_nomount` uses **Method 1 (Automatic Built-in Integration)** from NoMount's own documentation. The workflow downloads the upstream `kernel/setup.sh` at build time and runs it at the root of the kernel tree:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh -o "$RUNNER_TEMP/nomount-setup.sh"
+bash "$RUNNER_TEMP/nomount-setup.sh" "$NOMOUNT_REF"
+```
+
+`setup.sh` clones the NoMount repository into the kernel tree, creates the `fs/nomount` symlink to its `kernel/src`, appends `obj-$(CONFIG_NOMOUNT) += nomount/` to `fs/Makefile`, and inserts `source "fs/nomount/Kconfig"` into `fs/Kconfig`. The workflow then appends `CONFIG_NOMOUNT=y` to `gki_defconfig` and verifies that the symlink and both build-system entries actually exist. `nomount_ref` controls which branch/tag/commit of NoMount is checked out; an empty value makes the script use the latest `v*` tag.
+
+> [!WARNING]
+> Method 1 is network-dependent and version selection is not pinned by this repository: a new upstream tag or branch content can change what gets built. For fully reproducible/offline builds, vendor the source and use the manual method instead.
+
+The NoMount kernel source is GPL-2.0, has explicit compatibility guards for kernel 6.1+, uses `fs_initcall`, and exports no new kernel symbols, so GKI module ABI is preserved.
+
+> [!NOTE]
+> For standard GKI 5.10+ kernels the NoMount release ZIP already ships prebuilt LKMs, so flashing the NoMount KernelSU/APatch metamodule usually needs **no kernel modification**. This option is for builds that want NoMount compiled into the `Image` instead (e.g. custom kernels that block standard LKMs).
+
+> [!WARNING]
+> NoMount intercepts VFS path resolution and directory iteration in RAM, while SUSFS also hooks VFS (`SUS_PATH` / `SUS_MOUNT`). Test the combination with your chosen KernelSU/SUSFS variant. To actually use NoMount after flashing, install the NoMount metamodule from the project's Releases; installing it over a kernel that already has NoMount built-in is supported.
+
 ## Output file naming
 
 Single-build ZIPs roughly follow:
 
 ```text
-<ROM source>-A<Android version>-<KSU variant>[-dss|-dss-ext][-docker][-bbr3][-ttl][-sdp900][-unifix]-<UTC month/day>.zip
+<ROM source>-A<Android version>-<KSU variant>[-dss|-dss-ext][-docker][-bbr3][-ttl][-sdp900][-unifix][-nomount]-<UTC month/day>.zip
 ```
 
 Where:
@@ -182,6 +207,7 @@ Where:
 - `dss-ext`: Droidspaces Extended
 - `docker`: Docker container support enabled
 - `bbr3` / `ttl` / `sdp900` / `unifix`: the corresponding WildKernels feature options
+- `nomount`: NoMount built into the kernel
 
 ## Local build
 
@@ -211,4 +237,5 @@ For the complete source-fetching, patching, KernelSU/SUSFS integration and packa
 - [BakaSU](https://github.com/Baka-SU/BakaSU)
 - [SUSFS4KSU](https://gitlab.com/simonpunk/susfs4ksu)
 - [WildKernels/kernel_patches](https://github.com/WildKernels/kernel_patches)
+- [NoMount](https://github.com/maxsteeel/nomount)
 - Maintainers of the various ROMs, kernel sources and patch projects

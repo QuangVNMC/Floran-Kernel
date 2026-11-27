@@ -75,6 +75,18 @@ on:
         type: boolean
         default: false
 
+      enable_nomount:
+        description: "Integrate NoMount VFS path-redirector built-in via its setup.sh (Method 1)"
+        required: false
+        type: boolean
+        default: false
+
+      nomount_ref:
+        description: "NoMount branch/tag/commit passed to setup.sh (empty = latest tag)"
+        required: false
+        type: string
+        default: "dev"
+
       kernel_name:
         description: "Custom Kernel Name"
         required: false
@@ -321,6 +333,30 @@ jobs:
             echo "### WildKernels features:$FEATURES" >> "${GITHUB_STEP_SUMMARY}"
           fi
 
+      - name: Integrate NoMount (automatic setup.sh)
+        if: inputs.enable_nomount
+        env:
+          NOMOUNT_REF: ${{ inputs.nomount_ref }}
+        run: |
+          set -euo pipefail
+          cd sm8650
+          curl -fsSL https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh \
+            -o "${RUNNER_TEMP}/nomount-setup.sh"
+          if [[ -n "$NOMOUNT_REF" ]]; then
+            bash "${RUNNER_TEMP}/nomount-setup.sh" "$NOMOUNT_REF"
+          else
+            bash "${RUNNER_TEMP}/nomount-setup.sh"
+          fi
+
+          # Verify the upstream script actually wired NoMount into the kernel.
+          test -L fs/nomount
+          grep -qF 'source "fs/nomount/Kconfig"' fs/Kconfig
+          grep -qF '$(CONFIG_NOMOUNT) += nomount/' fs/Makefile
+          echo 'CONFIG_NOMOUNT=y' >> arch/arm64/configs/gki_defconfig
+
+          echo "### NoMount" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Integrated via upstream setup.sh (ref: ${NOMOUNT_REF:-latest tag}, CONFIG_NOMOUNT=y)" >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Compile Kernel
         env:
           KSU_TYPE: ${{ inputs.ksu_type }}
@@ -499,6 +535,7 @@ jobs:
           if [[ "${{ inputs.enable_ttl }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-ttl"; fi
           if [[ "${{ inputs.enable_sdp900ma }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-sdp900"; fi
           if [[ "${{ inputs.enable_unicode_fix }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-unifix"; fi
+          if [[ "${{ inputs.enable_nomount }}" == "true" ]]; then ZIP_PREFIX="${ZIP_PREFIX}-nomount"; fi
 
           ZIP_NAME="${{ inputs.rom_source }}-A${{ inputs.android_version }}-${ZIP_PREFIX}-$(date -u +"%m%d")"
           git clone --depth=1 https://github.com/AkiHaza/AnyKernel3.git
@@ -588,6 +625,7 @@ jobs:
             | KernelSU | ${{ env.KSU_TYPENAME }} |
             | Droidspaces | ${{ inputs.droidspaces }} |
             | WildKernels features | BBRv3: ${{ inputs.enable_bbr3 }} / TTL: ${{ inputs.enable_ttl }} / SDP 900mA: ${{ inputs.enable_sdp900ma }} / Unicode fix: ${{ inputs.enable_unicode_fix }} |
+            | NoMount | ${{ inputs.enable_nomount && 'Built-in (CONFIG_NOMOUNT=y)' || 'Off' }} |
             | Built at | ${{ env.TIME_FORM }} |
 
             **Manager downloads:**

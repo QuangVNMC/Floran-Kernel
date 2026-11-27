@@ -83,6 +83,18 @@ on:
         type: boolean
         default: false
 
+      enable_nomount:
+      nomount_ref:
+        description: "NoMount branch/tag/commit passed to setup.sh (empty = latest tag)"
+        required: false
+        type: string
+        default: "dev"
+
+        description: "Integrate NoMount VFS path-redirector built-in (from maxsteeel/nomount)"
+        required: false
+        type: boolean
+        default: false
+
       enable_unicode_fix:
         description: "Unicode bypass fix for kernel 6.1+"
         required: false
@@ -123,6 +135,8 @@ jobs:
       enable_ttl: ${{ inputs.enable_ttl }}
       enable_sdp900ma: ${{ inputs.enable_sdp900ma }}
       enable_unicode_fix: ${{ inputs.enable_unicode_fix }}
+      enable_nomount: ${{ inputs.enable_nomount }}
+      nomount_ref: ${{ inputs.nomount_ref }}
       kernel_name: ${{ inputs.kernel_name }}
       create_release: ${{ inputs.create_release }}
     secrets: inherit
